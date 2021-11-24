@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  webserver-dev2:
+    build: ./docker
+    image: webserver-dev2
+    ports:
+      - "80:80"
+      - "443:433"
+    volumes:
+      - ./www:/var/www
+    links:
+      - mysql
+
+  mysql:
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db:/var/lib/mysql
+    environment:
+      MYSQL_SERVERNAME: localhost
+      MYSQL_USERNAME: root
+      MYSQL_ROOT_PASSWORD: devine4life
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    links:
+      - mysql
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/php/php.ini:/usr/local/etc/php/php.ini
+    environment:
+      MYSQL_SERVERNAME: localhost
+      MYSQL_USERNAME: root
+      MYSQL_ROOT_PASSWORD: devine4life
+      PMA_HOST: mysql
+      UPLOAD_LIMIT: 128M

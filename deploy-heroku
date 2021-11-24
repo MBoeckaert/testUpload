@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+PROJECT_PATH=${1?Error: no project folder given}
+HEROKU_DOMAIN=${2?Error: no heroku project name set}
+ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+DOCKERFILE="Dockerfile"
+
+#PROJECT_PATH="./www/html/deployproject"
+#HEROKU_DOMAIN="docker-testing-php"
+
+echo "Starting deployment to ${HEROKU_DOMAIN}"
+echo "Step 1: building project for production using webpack"
+cd $PROJECT_PATH
+npm run prod
+
+echo "Step 2: copying files to the temporary heroku folder"
+cd $ROOT_DIR
+mkdir heroku
+echo "Copy Dockerfile with php settings"
+cp -R ./docker/ ./heroku
+echo "Copy webpack dist folder"
+cp -R $PROJECT_PATH/dist ./heroku
+echo "Copy vendor folder"
+cp -R $ROOT_DIR/www/vendor ./heroku/dist
+echo "Copy content"
+cd heroku
+echo -e "\nCOPY ./dist /var/www/html" >> $DOCKERFILE
+
+echo "Step 3: build the docker image"
+docker image build . --tag local:$HEROKU_DOMAIN
+
+echo "Step 4: launch the container"
+docker container run -d --name $HEROKU_DOMAIN -p 8080:80 local:$HEROKU_DOMAIN
+
+echo "Step 5: adding port configuration to Dockerfile"
+echo -e "\nCMD sed -i \"s/80/\$PORT/g\" /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf && docker-php-entrypoint apache2-foreground" >> $DOCKERFILE
+
+echo "Step 5: connect with heroku"
+heroku login
+heroku container:login
+heroku labs:enable --app=$HEROKU_DOMAIN runtime-new-layer-extract
+
+echo "Step 6: push and release container to Heroku"
+heroku container:push web -a $HEROKU_DOMAIN
+heroku container:release web -a $HEROKU_DOMAIN
+
+echo "Step 7: clean up of the project"
+cd $ROOT_DIR
+rm -R heroku
+# remove the docker container and image
+docker rmi $(docker images -q registry.heroku.com/$HEROKU_DOMAIN/web)
+docker rmi $(docker images -q local)
